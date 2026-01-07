@@ -1493,7 +1493,11 @@ export class BaseCompiler {
         const execOptions = this.getDefaultExecOptions();
         const output = await this.runCompiler(this.compiler.exe, newOptions, this.filename(inputFilename), execOptions);
         if (output.code !== 0) {
-            return [{text: 'Failed to run compiler to get ClangIR code'}];
+            const stderr = utils.resultLinesToText(output.stderr);
+            const stdout = utils.resultLinesToText(output.stdout);
+            const msg =
+                stderr.trim() || stdout.trim() || `Compiler exited with code ${output.code} but produced no output`;
+            return ['Failed to run compiler to get ClangIR code', ...msg.split('\n')].map(line => ({text: line}));
         }
 
         if (await utils.fileExists(outputFilename)) {
@@ -1503,6 +1507,134 @@ export class BaseCompiler {
             }));
         }
         return [{text: 'Internal error; unable to open output path'}];
+    }
+
+    async generateLlvmMlir(inputFilename: string, options: string[]): Promise<ResultLine[]> {
+        // 1) Emit LLVM bitcode
+        const bcFilename = utils.changeExtension(inputFilename, '.bc');
+        const bcOptions = [...options];
+
+        // Replace any existing `-o <name>` with our bitcode output filename
+        const oIndex = bcOptions.indexOf('-o');
+        if (oIndex !== -1) {
+            bcOptions.splice(oIndex, 2);
+        }
+        // Compile to bitcode: use -c -emit-llvm (or -emit-llvm-bc if supported)
+        if (!bcOptions.includes('-c')) bcOptions.push('-c');
+        if (!bcOptions.includes('-emit-llvm')) bcOptions.push('-emit-llvm');
+        bcOptions.push('-o', bcFilename);
+
+        const execOptions = this.getDefaultExecOptions();
+        const bcResult = await this.runCompiler(
+            this.compiler.exe,
+            bcOptions,
+            this.filename(inputFilename),
+            execOptions,
+        );
+        if (bcResult.code !== 0 || !(await utils.fileExists(bcFilename))) {
+            const stderr = utils.resultLinesToText(bcResult.stderr);
+            const stdout = utils.resultLinesToText(bcResult.stdout);
+            const msg =
+                stderr.trim() || stdout.trim() || `Compiler exited with code ${bcResult.code} but produced no output`;
+            return ['Failed to run compiler to get LLVM bitcode', ...msg.split('\n')].map(line => ({text: line}));
+        }
+
+        // 2) Import bitcode into MLIR LLVM dialect using ns-translate
+        const defaultNsTranslate = path.join(os.homedir(), 'ns/bin/ns-translate');
+        const nsTranslate = this.env.ceProps('llvmMlirTranslate', defaultNsTranslate);
+        if (!(await utils.fileExists(nsTranslate))) {
+            return [{text: `ns-translate not found at: ${nsTranslate}`}];
+        }
+        const importResult = await this.exec(nsTranslate, ['--import-llvm', bcFilename], execOptions);
+        if (importResult.code !== 0) {
+            const stderr = importResult.stderr || '';
+            const stdout = importResult.stdout || '';
+            const msg =
+                stderr.trim() ||
+                stdout.trim() ||
+                `ns-translate exited with code ${importResult.code} but produced no output`;
+            return ['Failed to translate LLVM bitcode to LLVM-dialect MLIR', ...msg.split('\n')].map(line => ({
+                text: line,
+            }));
+        }
+
+        const outText = importResult.stdout || '';
+        if (!outText.trim()) {
+            // If stdout is empty, check stderr - sometimes tools output to stderr even on success
+            const errText = importResult.stderr || '';
+            if (errText.trim()) {
+                return errText.split('\n').map(line => ({text: line}));
+            }
+            return [{text: `<No output from ns-translate (exit code: ${importResult.code})>`}];
+        }
+        const lines = outText.split('\n').map(line => ({text: line}));
+        // Filter out empty lines at the end
+        while (lines.length > 0 && !lines[lines.length - 1].text.trim()) {
+            lines.pop();
+        }
+        return lines.length > 0 ? lines : [{text: '<Empty output from ns-translate>'}];
+    }
+
+    async generateGridFromLlvmMlir(llvmMlir: ResultLine[]): Promise<ResultLine[]> {
+        const nsMlcOptDefault = path.join(os.homedir(), 'ns/bin/ns-mlc-opt');
+        const nsMlcOpt = this.env.ceProps('nsMlcOpt', nsMlcOptDefault);
+        if (!(await utils.fileExists(nsMlcOpt))) {
+            return [{text: `ns-mlc-opt not found at: ${nsMlcOpt}`}];
+        }
+
+        const llvmText = (llvmMlir || [])
+            .map(l => (typeof (l as any)?.text === 'string' ? (l as any).text : ''))
+            .join('\n');
+        if (!llvmText.trim()) {
+            return [{text: '<No LLVM-dialect MLIR to convert>'}];
+        }
+
+        const execOptions = this.getDefaultExecOptions();
+        execOptions.input = llvmText;
+        execOptions.maxOutput = 1024 * 1024 * 1024;
+
+        // Prefer direct pass flag (simpler than pass pipeline quoting).
+        let result = await this.exec(nsMlcOpt, ['-', '--convert-llvm-to-grid="simplify"'], execOptions);
+
+        // Some builds register this as a function pass, which cannot be scheduled at module level via the direct flag.
+        // In that case, fall back to an explicit nested pipeline.
+        if (
+            result.code !== 0 &&
+            ((result.stderr || '').includes('unable to schedule pass') || (result.stderr || '').includes('PassManager'))
+        ) {
+            result = await this.exec(
+                nsMlcOpt,
+                ['-', '--pass-pipeline=builtin.module(llvm.func(convert-llvm-to-grid))'],
+                execOptions,
+            );
+        }
+
+        if (result.code !== 0) {
+            const stderr = result.stderr || '';
+            const stdout = result.stdout || '';
+            const msg =
+                stderr.trim() || stdout.trim() || `ns-mlc-opt exited with code ${result.code} but produced no output`;
+            return ['Failed to convert LLVM dialect to Grid dialect', ...msg.split('\n')].map(text => ({text}));
+        }
+
+        const outText = result.stdout || '';
+        if (!outText.trim()) {
+            const errText = result.stderr || '';
+            if (errText.trim()) return errText.split('\n').map(text => ({text}));
+            return [{text: '<No output from ns-mlc-opt>'}];
+        }
+
+        const lines = outText.split('\n').map(text => ({text}));
+        // If conversion appears to be a no-op, surface a hint rather than silently showing LLVM dialect.
+        const hasGrid = outText.includes('grid.');
+        const hasLlvmDialect = outText.includes('llvm.func') || outText.includes('llvm.');
+        if (!hasGrid && hasLlvmDialect) {
+            return [
+                {text: '// NOTE: convert-llvm-to-grid produced no grid.* ops (output may still be LLVM dialect).'},
+                ...lines,
+            ];
+        }
+        return lines;
     }
 
     async generateOptPipeline(
@@ -2468,6 +2600,8 @@ export class BaseCompiler {
         const makeGnatDebug = backendOptions.produceGnatDebug && this.compiler.supportsGnatDebugViews;
         const makeGnatDebugTree = backendOptions.produceGnatDebugTree && this.compiler.supportsGnatDebugViews;
         const makeIr = backendOptions.produceIr && this.compiler.supportsIrView;
+        const makeGrid = backendOptions.produceGrid && this.compiler.supportsLlvmMlirView;
+        const makeLlvmMlir = (backendOptions.produceLlvmMlir || makeGrid) && this.compiler.supportsLlvmMlirView;
         const makeClangir = backendOptions.produceClangir && this.compiler.supportsClangirView;
         const makeClojureMacroExp = backendOptions.produceClojureMacroExp && this.compiler.supportsClojureMacroExpView;
         const makeOptPipeline = backendOptions.produceOptPipeline && this.compiler.optPipeline;
@@ -2486,6 +2620,7 @@ export class BaseCompiler {
             ppResult,
             irResult,
             clangirResult,
+            llvmMlirResult,
             optPipelineResult,
             rustHirResult,
             rustMacroExpResult,
@@ -2504,7 +2639,10 @@ export class BaseCompiler {
                       filters,
                   )
                 : undefined,
-            makeClangir ? this.generateClangir(inputFilename, options, backendOptions.produceClangir) : undefined,
+            makeClangir
+                ? this.generateClangir(inputFilename, options, backendOptions.produceClangir ?? {flatCFG: false})
+                : undefined,
+            makeLlvmMlir ? this.generateLlvmMlir(inputFilename, options) : undefined,
             makeOptPipeline
                 ? this.generateOptPipeline(inputFilename, options, filters, backendOptions.produceOptPipeline)
                 : undefined,
@@ -2589,6 +2727,12 @@ export class BaseCompiler {
 
         asmResult.irOutput = irResult;
         asmResult.clangirOutput = clangirResult;
+        if (makeGrid) {
+            asmResult.gridOutput = await this.generateGridFromLlvmMlir(llvmMlirResult ?? []);
+        }
+        if (backendOptions.produceLlvmMlir) {
+            asmResult.llvmMlirOutput = llvmMlirResult;
+        }
         asmResult.optPipelineOutput = optPipelineResult;
 
         asmResult.rustMirOutput = rustMirResult;
@@ -3740,6 +3884,14 @@ but nothing was dumped. Possible causes are:
         }
         if (exe.includes('clangir')) {
             return ClangirParser;
+        }
+        // NextSilicon toolchain drivers are clang-based but do not include "clang" in their filename.
+        // Treat them as clang for argument parsing / feature detection.
+        if (exeFilename.includes('nextcxx')) {
+            return ClangParser;
+        }
+        if (exeFilename.includes('nextcc')) {
+            return ClangCParser;
         }
         if (exeFilename.includes('clang++') || exeFilename.includes('icpx')) {
             // check this first as "clang++" matches "g++"

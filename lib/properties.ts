@@ -86,6 +86,14 @@ export function parseProperties(blob: string, name: string): Record<string, Prop
         }
         const prop = split[1].trim();
         let val: string | number | boolean = split[2].trim();
+
+        // Allow environment variable expansion in string properties, e.g.:
+        //   ${HOME}/bin/tool  or  ${NEXT_HOME}/bin/nextcxx
+        // If the environment variable is not set, leave the token as-is.
+        const expandEnvVars = (s: string) =>
+            s.replace(/\$\{([A-Z0-9_]+)\}/g, (m, varName) => process.env[varName] ?? m);
+        val = expandEnvVars(val);
+
         // hack to avoid applying toProperty to version properties
         // so that they're not parsed as numbers
         if (!prop.endsWith('.version') && !prop.endsWith('.semver')) {

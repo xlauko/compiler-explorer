@@ -84,6 +84,7 @@ export type CompilerInfo = {
     supportsIrView?: boolean;
     supportsIrViewOptToggleOption?: boolean;
     supportsClangirView?: boolean;
+    supportsLlvmMlirView?: boolean;
     supportsRustMirView?: boolean;
     supportsRustMacroExpView?: boolean;
     supportsRustHirView?: boolean;

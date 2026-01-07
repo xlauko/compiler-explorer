@@ -30,7 +30,9 @@ import {CompilerOutputOptions} from '../types/features/filters.interfaces.js';
 import {CfgState} from './panes/cfg-view.interfaces.js';
 import {ClangirState} from './panes/clangir-view.interfaces.js';
 import {GccDumpViewState} from './panes/gccdump-view.interfaces.js';
+import {GridViewState} from './panes/grid-view.interfaces.js';
 import {IrState} from './panes/ir-view.interfaces.js';
+import {LlvmMlirState} from './panes/llvmmlir-view.interfaces.js';
 import {OptPipelineViewState} from './panes/opt-pipeline.interfaces.js';
 import {MonacoPane, Pane} from './panes/pane';
 import {MonacoPaneState, PaneState} from './panes/pane.interfaces.js';
@@ -64,6 +66,8 @@ export const CFG_VIEW_COMPONENT_NAME = 'cfg' as const;
 export const CONFORMANCE_VIEW_COMPONENT_NAME = 'conformance' as const;
 export const IR_VIEW_COMPONENT_NAME = 'ir' as const;
 export const CLANGIR_VIEW_COMPONENT_NAME = 'clangir' as const;
+export const GRID_VIEW_COMPONENT_NAME = 'grid' as const;
+export const LLVM_MLIR_VIEW_COMPONENT_NAME = 'llvmmlir' as const;
 export const OPT_PIPELINE_VIEW_COMPONENT_NAME = 'optPipelineView' as const;
 // Historical LLVM-specific name preserved to keep old links working
 export const LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME = 'llvmOptPipelineView' as const;
@@ -252,6 +256,24 @@ export type PopulatedClangirViewState = StateWithId &
         compilerName: string;
     };
 
+export type EmptyGridViewState = EmptyState;
+export type PopulatedGridViewState = StateWithId &
+    GridViewState & {
+        editorid: number;
+        treeid: number;
+        source: string;
+        compilerName: string;
+    };
+
+export type EmptyLlvmMlirViewState = EmptyState;
+export type PopulatedLlvmMlirViewState = StateWithId &
+    LlvmMlirState & {
+        editorid: number;
+        treeid: number;
+        source: string;
+        compilerName: string;
+    };
+
 export type EmptyOptPipelineViewState = EmptyState;
 export type PopulatedOptPipelineViewState = StateWithId &
     OptPipelineViewState & {
@@ -389,6 +411,8 @@ export interface ComponentStateMap {
     [CONFORMANCE_VIEW_COMPONENT_NAME]: PopulatedConformanceViewState;
     [IR_VIEW_COMPONENT_NAME]: EmptyIrViewState | PopulatedIrViewState;
     [CLANGIR_VIEW_COMPONENT_NAME]: EmptyClangirViewState | PopulatedClangirViewState;
+    [GRID_VIEW_COMPONENT_NAME]: EmptyGridViewState | PopulatedGridViewState;
+    [LLVM_MLIR_VIEW_COMPONENT_NAME]: EmptyLlvmMlirViewState | PopulatedLlvmMlirViewState;
     [OPT_PIPELINE_VIEW_COMPONENT_NAME]: EmptyOptPipelineViewState | PopulatedOptPipelineViewState;
     [LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME]: EmptyOptPipelineViewState | PopulatedOptPipelineViewState;
     [RUST_MIR_VIEW_COMPONENT_NAME]: EmptyRustMirViewState | PopulatedRustMirViewState;

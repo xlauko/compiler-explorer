@@ -15,7 +15,12 @@
 /etc/scripts/docenizers/.uv
 
 # user local customizations
+# Allow committing selected local config files (useful for dev environments that share a common NEXT_HOME layout).
+# Note: negate AFTER the ignore rule.
 /etc/**/*.local.*
+!/etc/config/compiler-explorer.local.properties
+!/etc/config/c.local.properties
+!/etc/config/c++.local.properties
 /lib/storage/data
 
 # IDE project files

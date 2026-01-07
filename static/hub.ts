@@ -42,11 +42,13 @@ import {
     GCC_DUMP_VIEW_COMPONENT_NAME,
     GNAT_DEBUG_TREE_VIEW_COMPONENT_NAME,
     GNAT_DEBUG_VIEW_COMPONENT_NAME,
+    GRID_VIEW_COMPONENT_NAME,
     HASKELL_CMM_VIEW_COMPONENT_NAME,
     HASKELL_CORE_VIEW_COMPONENT_NAME,
     HASKELL_STG_VIEW_COMPONENT_NAME,
     InferComponentState,
     IR_VIEW_COMPONENT_NAME,
+    LLVM_MLIR_VIEW_COMPONENT_NAME,
     LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME,
     OPT_PIPELINE_VIEW_COMPONENT_NAME,
     OPT_VIEW_COMPONENT_NAME,
@@ -79,10 +81,12 @@ import {Flags as FlagsView} from './panes/flags-view.js';
 import {GccDump as GCCDumpView} from './panes/gccdump-view.js';
 import {GnatDebug as GnatDebugView} from './panes/gnatdebug-view.js';
 import {GnatDebugTree as GnatDebugTreeView} from './panes/gnatdebugtree-view.js';
+import {GridView as GridViewPane} from './panes/grid-view.js';
 import {HaskellCmm as HaskellCmmView} from './panes/haskellcmm-view.js';
 import {HaskellCore as HaskellCoreView} from './panes/haskellcore-view.js';
 import {HaskellStg as HaskellStgView} from './panes/haskellstg-view.js';
 import {Ir as IrView} from './panes/ir-view.js';
+import {LlvmMlir as LlvmMlirView} from './panes/llvmmlir-view.js';
 import {OptPipeline} from './panes/opt-pipeline.js';
 import {Opt as OptView} from './panes/opt-view.js';
 import {Output} from './panes/output.js';
@@ -146,6 +150,8 @@ export class Hub {
         layout.registerComponent(AST_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.astViewFactory(c, s));
         layout.registerComponent(IR_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.irViewFactory(c, s));
         layout.registerComponent(CLANGIR_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.clangirViewFactory(c, s));
+        layout.registerComponent(GRID_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.gridViewFactory(c, s));
+        layout.registerComponent(LLVM_MLIR_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.llvmMlirViewFactory(c, s));
         layout.registerComponent(OPT_PIPELINE_VIEW_COMPONENT_NAME, (c: GLC, s: any) => this.optPipelineFactory(c, s));
         // Historical LLVM-specific name preserved to keep old links working
         layout.registerComponent(LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME, (c: GLC, s: any) =>
@@ -523,6 +529,17 @@ export class Hub {
 
     public clangirViewFactory(container: GoldenLayout.Container, state: InferComponentState<ClangirView>): ClangirView {
         return new ClangirView(this, container, state);
+    }
+
+    public gridViewFactory(container: GoldenLayout.Container, state: InferComponentState<GridViewPane>): GridViewPane {
+        return new GridViewPane(this, container, state);
+    }
+
+    public llvmMlirViewFactory(
+        container: GoldenLayout.Container,
+        state: InferComponentState<LlvmMlirView>,
+    ): LlvmMlirView {
+        return new LlvmMlirView(this, container, state);
     }
 
     public optPipelineFactory(container: GoldenLayout.Container, state: InferComponentState<OptPipeline>): OptPipeline {

@@ -109,6 +109,10 @@ export type CompilationRequestOptions = {
         produceGnatDebug?: boolean;
         produceIr?: LLVMIrBackendOptions | null;
         produceClangir?: ClangirBackendOptions | null;
+        // Grid View: Grid dialect MLIR produced from LLVM-dialect MLIR via ns-mlc-opt.
+        produceGrid?: boolean;
+        // LLVM MLIR View: compile to LLVM IR and import into MLIR LLVM dialect
+        produceLlvmMlir?: boolean;
         produceOptPipeline?: OptPipelineBackendOptions | null;
         produceDevice?: boolean;
         produceRustMir?: boolean;
@@ -203,6 +207,8 @@ export type CompilationResult = {
         cfg?: CFGResult;
     };
     clangirOutput?: ResultLine[];
+    gridOutput?: ResultLine[];
+    llvmMlirOutput?: ResultLine[];
 
     optPipelineOutput?: OptPipelineOutput;
 

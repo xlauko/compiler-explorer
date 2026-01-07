@@ -187,6 +187,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
     private astButton: JQuery<HTMLButtonElement>;
     private irButton: JQuery<HTMLButtonElement>;
     private clangirButton: JQuery<HTMLButtonElement>;
+    private gridButton: JQuery<HTMLButtonElement>;
+    private llvmMlirButton: JQuery<HTMLButtonElement>;
     private optPipelineButton: JQuery<HTMLButtonElement>;
     private deviceButton: JQuery<HTMLButtonElement>;
     private gnatDebugTreeButton: JQuery<HTMLButtonElement>;
@@ -260,6 +262,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
     private astViewOpen: boolean;
     private irViewOpen: boolean;
     private clangirViewOpen: boolean;
+    private gridViewOpen: boolean;
+    private llvmMlirViewOpen: boolean;
     private optPipelineViewOpenCount: number;
     private gccDumpViewOpen: boolean;
     private gccDumpPassSelected?: GccDumpViewSelectedPass;
@@ -312,6 +316,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         this.cfgViewOpenCount = 0;
         this.irCfgViewOpenCount = 0;
         this.optPipelineViewOpenCount = 0;
+        this.gridViewOpen = false;
+        this.llvmMlirViewOpen = false;
 
         this.decorations = {
             labelUsages: [],
@@ -535,6 +541,28 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
                 this.id,
                 this.source,
                 this.lastResult?.irOutput,
+                this.getCompilerName(),
+                this.sourceEditorId ?? 0,
+                this.sourceTreeId ?? 0,
+            );
+        };
+
+        const createGridView = () => {
+            return Components.getGridViewWith(
+                this.id,
+                this.source,
+                this.lastResult?.gridOutput,
+                this.getCompilerName(),
+                this.sourceEditorId ?? 0,
+                this.sourceTreeId ?? 0,
+            );
+        };
+
+        const createLlvmMlirView = () => {
+            return Components.getLlvmMlirViewWith(
+                this.id,
+                this.source,
+                this.lastResult?.llvmMlirOutput,
                 this.getCompilerName(),
                 this.sourceEditorId ?? 0,
                 this.sourceTreeId ?? 0,
@@ -829,6 +857,30 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
                 this.hub.findParentRowOrColumn(this.container.parent) ||
                 this.container.layoutManager.root.contentItems[0];
             insertPoint.addChild(createClangirView());
+        });
+
+        createDragSource(this.container.layoutManager, this.gridButton, () => createGridView()).on(
+            'dragStart',
+            hidePaneAdder,
+        );
+
+        this.gridButton.on('click', () => {
+            const insertPoint =
+                this.hub.findParentRowOrColumn(this.container.parent) ||
+                this.container.layoutManager.root.contentItems[0];
+            insertPoint.addChild(createGridView());
+        });
+
+        createDragSource(this.container.layoutManager, this.llvmMlirButton, () => createLlvmMlirView()).on(
+            'dragStart',
+            hidePaneAdder,
+        );
+
+        this.llvmMlirButton.on('click', () => {
+            const insertPoint =
+                this.hub.findParentRowOrColumn(this.container.parent) ||
+                this.container.layoutManager.root.contentItems[0];
+            insertPoint.addChild(createLlvmMlirView());
         });
 
         createDragSource(this.container.layoutManager, this.optPipelineButton, () => createOptPipelineView()).on(
@@ -1337,6 +1389,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
                 produceGnatDebug: this.gnatDebugViewOpen,
                 produceIr: this.irViewOpen ? this.llvmIrOptions : null,
                 produceClangir: this.clangirViewOpen ? this.clangirOptions : null,
+                produceGrid: this.gridViewOpen ?? false,
+                produceLlvmMlir: this.llvmMlirViewOpen ?? false,
                 produceOptPipeline: this.optPipelineViewOpenCount > 0 ? this.optPipelineOptions : null,
                 produceDevice: this.deviceViewOpen,
                 produceRustMir: this.rustMirViewOpen,
@@ -2073,6 +2127,37 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         }
     }
 
+    onGridViewOpened(id: number): void {
+        if (this.id === id) {
+            this.gridButton.prop('disabled', true);
+            this.gridViewOpen = true;
+            // Grid output is derived from clangir output server-side, so trigger a recompile.
+            this.compile();
+        }
+    }
+
+    onGridViewClosed(id: number): void {
+        if (this.id === id) {
+            this.gridButton.prop('disabled', false);
+            this.gridViewOpen = false;
+        }
+    }
+
+    onLlvmMlirViewOpened(id: number): void {
+        if (this.id === id) {
+            this.llvmMlirButton.prop('disabled', true);
+            this.llvmMlirViewOpen = true;
+            this.compile();
+        }
+    }
+
+    onLlvmMlirViewClosed(id: number): void {
+        if (this.id === id) {
+            this.llvmMlirButton.prop('disabled', false);
+            this.llvmMlirViewOpen = false;
+        }
+    }
+
     onLLVMIrViewOptionsUpdated(id: number, options: LLVMIrBackendOptions, recompile: boolean): void {
         if (this.id === id) {
             this.llvmIrOptions = options;
@@ -2467,6 +2552,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         this.astButton = this.domRoot.find('.btn.view-ast');
         this.irButton = this.domRoot.find('.btn.view-ir');
         this.clangirButton = this.domRoot.find('.btn.view-clangir');
+        this.gridButton = this.domRoot.find('.btn.view-grid');
+        this.llvmMlirButton = this.domRoot.find('.btn.view-llvmmlir');
         this.optPipelineButton = this.domRoot.find('.btn.view-opt-pipeline');
         this.deviceButton = this.domRoot.find('.btn.view-device');
         this.gnatDebugTreeButton = this.domRoot.find('.btn.view-gnatdebugtree');
@@ -2761,6 +2848,8 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         this.astButton.prop('disabled', this.astViewOpen);
         this.irButton.prop('disabled', this.irViewOpen);
         this.clangirButton.prop('disabled', this.clangirViewOpen);
+        this.gridButton.prop('disabled', this.gridViewOpen);
+        this.llvmMlirButton.prop('disabled', this.llvmMlirViewOpen);
         // As per #4112, it's useful to have this available more than once: Don't disable it when it opens
         // this.optPipelineButton.prop('disabled', this.optPipelineViewOpen);
         this.deviceButton.prop('disabled', this.deviceViewOpen);
@@ -2784,6 +2873,9 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         this.astButton.toggle(!!this.compiler.supportsAstView);
         this.irButton.toggle(!!this.compiler.supportsIrView);
         this.clangirButton.toggle(!!this.compiler.supportsClangirView);
+        // Grid view is produced from LLVM-dialect MLIR (ns-translate --import-llvm) via ns-mlc-opt.
+        this.gridButton.toggle(!!this.compiler.supportsLlvmMlirView);
+        this.llvmMlirButton.toggle(!!this.compiler.supportsLlvmMlirView);
         this.optPipelineButton.toggle(!!this.compiler.optPipeline);
         this.deviceButton.toggle(!!this.compiler.supportsDeviceAsmView);
         this.rustMirButton.toggle(!!this.compiler.supportsRustMirView);
@@ -2957,6 +3049,10 @@ export class Compiler extends MonacoPane<monaco.editor.IStandaloneCodeEditor, Co
         this.eventHub.on('irViewClosed', this.onIrViewClosed, this);
         this.eventHub.on('clangirViewOpened', this.onClangirViewOpened, this);
         this.eventHub.on('clangirViewClosed', this.onClangirViewClosed, this);
+        this.eventHub.on('gridViewOpened', this.onGridViewOpened, this);
+        this.eventHub.on('gridViewClosed', this.onGridViewClosed, this);
+        this.eventHub.on('llvmMlirViewOpened', this.onLlvmMlirViewOpened, this);
+        this.eventHub.on('llvmMlirViewClosed', this.onLlvmMlirViewClosed, this);
         this.eventHub.on('llvmIrViewOptionsUpdated', this.onLLVMIrViewOptionsUpdated, this);
         this.eventHub.on('clangirViewOptionsUpdated', this.onClangirViewOptionsUpdated, this);
         this.eventHub.on('optPipelineViewOpened', this.onOptPipelineViewOpened, this);

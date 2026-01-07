@@ -48,12 +48,14 @@ import {
     GNAT_DEBUG_TREE_VIEW_COMPONENT_NAME,
     GNAT_DEBUG_VIEW_COMPONENT_NAME,
     GoldenLayoutConfig,
+    GRID_VIEW_COMPONENT_NAME,
     HASKELL_CMM_VIEW_COMPONENT_NAME,
     HASKELL_CORE_VIEW_COMPONENT_NAME,
     HASKELL_STG_VIEW_COMPONENT_NAME,
     IR_VIEW_COMPONENT_NAME,
     ItemConfig,
     LayoutItem,
+    LLVM_MLIR_VIEW_COMPONENT_NAME,
     LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME,
     OPT_PIPELINE_VIEW_COMPONENT_NAME,
     OPT_VIEW_COMPONENT_NAME,
@@ -614,6 +616,66 @@ export function getClangirViewWith(
             id,
             source,
             clangirOutput,
+            compilerName,
+            editorid,
+            treeid,
+        },
+    };
+}
+
+export function getGridView(): ComponentConfig<typeof GRID_VIEW_COMPONENT_NAME> {
+    return {
+        type: 'component',
+        componentName: GRID_VIEW_COMPONENT_NAME,
+        componentState: {},
+    };
+}
+
+export function getGridViewWith(
+    id: number,
+    source: string,
+    gridOutput: unknown,
+    compilerName: string,
+    editorid: number,
+    treeid: number,
+): ComponentConfig<typeof GRID_VIEW_COMPONENT_NAME> {
+    return {
+        type: 'component',
+        componentName: GRID_VIEW_COMPONENT_NAME,
+        componentState: {
+            id,
+            source,
+            gridOutput,
+            compilerName,
+            editorid,
+            treeid,
+        },
+    };
+}
+
+export function getLlvmMlirView(): ComponentConfig<typeof LLVM_MLIR_VIEW_COMPONENT_NAME> {
+    return {
+        type: 'component',
+        componentName: LLVM_MLIR_VIEW_COMPONENT_NAME,
+        componentState: {},
+    };
+}
+
+export function getLlvmMlirViewWith(
+    id: number,
+    source: string,
+    llvmMlirOutput: unknown,
+    compilerName: string,
+    editorid: number,
+    treeid: number,
+): ComponentConfig<typeof LLVM_MLIR_VIEW_COMPONENT_NAME> {
+    return {
+        type: 'component',
+        componentName: LLVM_MLIR_VIEW_COMPONENT_NAME,
+        componentState: {
+            id,
+            source,
+            llvmMlirOutput,
             compilerName,
             editorid,
             treeid,
@@ -1254,6 +1316,8 @@ function validateComponentState(componentName: string, state: any): boolean {
         case CONFORMANCE_VIEW_COMPONENT_NAME:
         case IR_VIEW_COMPONENT_NAME:
         case CLANGIR_VIEW_COMPONENT_NAME:
+        case GRID_VIEW_COMPONENT_NAME:
+        case LLVM_MLIR_VIEW_COMPONENT_NAME:
         case OPT_PIPELINE_VIEW_COMPONENT_NAME:
         case LLVM_OPT_PIPELINE_VIEW_COMPONENT_NAME:
         case RUST_MIR_VIEW_COMPONENT_NAME:

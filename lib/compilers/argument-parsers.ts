@@ -257,6 +257,7 @@ export class GCCParser extends BaseParser {
 
 export class ClangParser extends BaseParser {
     mllvmOptions = new Set<string>();
+    private supportsClangirCc1 = false;
 
     override async setCompilerSettingsFromOptions(options: Record<string, Argument>) {
         const keys = _.keys(options);
@@ -282,12 +283,18 @@ export class ClangParser extends BaseParser {
             this.compiler.compiler.supportsIrView = true;
             this.compiler.compiler.irArg = ['-Xclang', '-emit-llvm', '-fsyntax-only'];
             this.compiler.compiler.minIrArgs = ['-emit-llvm'];
+            // If we can emit LLVM IR, we can usually also show LLVM-dialect MLIR via ns-translate --import-llvm.
+            this.compiler.compiler.supportsLlvmMlirView = true;
         }
 
-        // if (this.hasSupport(options, '-emit-cir')) {
-        // #7265: clang-trunk supposedly has '-emit-cir', but it's not doing much. Checking explicitly
-        // for clangir in the compiler name instead.
-        if (this.compiler.compiler.name?.includes('clangir')) {
+        // ClangIR view support:
+        //
+        // Some clang builds advertise `-emit-cir` in driver help but do not actually have CIR
+        // support enabled (and may even abort). We therefore gate support on cc1 help containing
+        // the CIR action (queried in parse()).
+        //
+        // We keep a backwards-compatible fallback for special "clangir" builds.
+        if (this.supportsClangirCc1 || this.compiler.compiler.name?.includes('clangir')) {
             this.compiler.compiler.supportsClangirView = true;
         }
 
@@ -340,6 +347,17 @@ export class ClangParser extends BaseParser {
             this.mllvmOptions = new Set(
                 _.keys(await this.getOptions(this.getHiddenHelpOptions().join(' '), false, true)),
             );
+            try {
+                // This is a cheap/safe probe. It should not execute compilation, only prints cc1 help.
+                const cc1Help = await this.compiler.execCompilerCached(this.compiler.compiler.exe, [
+                    '-Xclang',
+                    '-help',
+                ]);
+                const cc1Text = (cc1Help.stdout || '') + (cc1Help.stderr || '');
+                this.supportsClangirCc1 = cc1Text.includes('emit-cir');
+            } catch {
+                this.supportsClangirCc1 = false;
+            }
             await this.setCompilerSettingsFromOptions(options);
         } catch (error) {
             const err = `Error while trying to generate llvm backend arguments for ${this.compiler.compiler.id}: ${error}`;
